@@ -6,6 +6,8 @@ import logging
 
 from anthropic.types.beta.message_create_params import OutputFormat
 from pydantic import BaseModel
+from dotenv import load_dotenv
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

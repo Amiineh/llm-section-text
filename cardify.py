@@ -12,7 +12,7 @@ class Cardify:
             self.sectionerAgent = SectionerAgent()
         else:
             self.sectionerAgent = llmAgent
-        self.num_retries = 2
+        self.num_retries = 3
         self.current_attempt = 0
         self.fuzzy_threshold = 0.8
 

@@ -8,7 +8,6 @@ logging.basicConfig(
 )
 from cardify import Cardify
 
-# todo: add more tests & try-catch
 with open("sample.txt", 'r') as f:
     document = f.read()
     print(f"Successfully opened text document: {document[:30]}...")
