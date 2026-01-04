@@ -3,8 +3,14 @@
 import os
 import anthropic
 import logging
-import json
+
+from anthropic.types.beta.message_create_params import OutputFormat
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
+
+class OutputFormat(BaseModel):
+    endings: list[str]
 
 class SectionerAgent:
     def __init__(self):
@@ -12,39 +18,45 @@ class SectionerAgent:
         if api_key is None:
             raise ValueError('ANTHROPIC_API_KEY not defined in .env')
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = "claude-sonnet-4-5-20250929"
-        self.max_token = 4000
+        self.model = "claude-sonnet-4-5"
+        self.max_token = 4000 # for model definition
+        self.max_input_tokens = 180000  # Approximate limit for inference
 
 
     def _get_prompt(self, document, target_slides):
         prompt = f"""
-                You are helping split a document into exactly {target_slides} sections for a presentation slide deck.
-                Given an input string in markdown format and int N (number of target slides), output a json array of unique strings specifying the ending of each section. 
+                You are helping split a markdown document into exactly {target_slides} sections for a presentation slide deck, by specifying the ending of each section. 
                 Each section should represent one cohesive idea that could become a single slide.
 
+                TASK: Return a JSON object with an 'endings' array containing EXACTLY {target_slides} unique text snippets. Each snippet marks where one section ENDS.
+
                 CRITICAL REQUIREMENTS:
-                1. You must identify exactly {target_slides} split points
-                2. Only split at natural semantic boundaries (between ideas, sections, or paragraphs)
-                3. Splits should be at paragraph breaks (double newlines) or major section transitions
-                4. DO NOT split in the middle of sentences, bullet points, or paragraphs
-                5. The content must be preserved exactly - we're only deciding where to split
+                1. You must return exactly {target_slides} snippets (one for each section ending)
+                2. Each snippet is the LAST 40-60 characters of a section
+                3. Only section at natural semantic boundaries (use headers, ideas, or paragraphs as cues)
+                4. DO NOT split in the middle of words, sentences, list items, or tables
+                5. The content must be preserved exactly (don't fix typos or omit leading whitespaces)
+                6. Each snippet must be unique (appear only once in the document)
 
-                Your task:
-                Analyze the document and return EXACTLY {target_slides} unique text snippets that mark where each split should occur.
-                Each snippet should be the LAST 40-60 characters before the split point (before the newlines that separate sections).
+                OUTPUT FORMAT:
+                Return a JSON object with an 'endings' array containing EXACTLY {target_slides} strings. No explanation, no markdown code blocks, just the array:
+                ['snippet 1', 'snippet 2', ..., 'snippet {target_slides}']
+                
+                EXAMPLE:
+                If asked for 3 sections, return 3 snippets:
+                {{
+                    'endings': [
+                        'text ending section 1',
+                        'text ending section 2', 
+                        'text ending section 3'
+                    ]
+                }}
 
-                Return ONLY a valid JSON array in this exact format:
-                [
-                  "unique text snippet ending section 1",
-                  "unique text snippet ending section 2",
-                  ...
-                ]
-
-                Requirements for snippets:
-                - Each snippet must appear EXACTLY ONCE in the document
-                - Include enough text to be unique (40-60 chars)
-                - The split will occur immediately AFTER this snippet
-                - Choose snippets that end naturally (end of paragraphs/sections)
+                SNIPPETS SHOULD:
+                - Be 40-60 characters long
+                - Include trailing newlines/punctuation if present
+                - Come from natural section boundaries
+                - Be unique (not repeated elsewhere in document)
 
                 Document to split:
                 {document}
@@ -55,18 +67,36 @@ class SectionerAgent:
 
 
     def get_llm_response(self, document, target_slides):
-        if os.getenv('DEBUG'):
-            return ['workflows faster than ever before.', 'economic actors in the field.\n']
-        message = self.client.messages.create(
-            model=self.model,
-            max_tokens=self.max_token,  # todo: handel case where input is too long by dividing it
-            messages=[{"role": "user", "content": self._get_prompt(document, target_slides)}]
-        )
-        response_text = message.content[0].text.strip()
-        if response_text.startswith('```'):
-            lines = response_text.split('\n')
-            response_text = ''.join(lines[1:-1])
+        # Warn if document is too long (can use divide and induction to counteract this)
+        estimated_tokens = len(document) // 4  # Rough estimate
+        if estimated_tokens > self.max_input_tokens:
+            logger.warning(f"Document may exceed token limit (~{estimated_tokens} tokens)")
 
-        logger.info(f"llm response: {response_text}")
-        endings = json.loads(response_text)
-        return endings
+        if os.getenv('DEBUG') == '1':
+            return ['workflows faster than ever before.', 'economic actors in the fiell.\n']
+
+        try:
+            prompt = self._get_prompt(document, target_slides)
+            message = self.client.beta.messages.parse(
+                model=self.model,
+                max_tokens=self.max_token,
+                messages=[{"role": "user", "content": prompt}],
+                betas=['structured-outputs-2025-11-13'],
+                output_format=OutputFormat
+            )
+            response_dict = message.parsed_output
+            logger.info(f"llm response: {response_dict}")
+            if isinstance(response_dict, OutputFormat):
+                endings = response_dict.endings
+                logger.info(f"Extracted {len(endings)} endings")
+                return endings
+            else:
+                logger.error(f"Response missing 'endings' key: {response_dict}")
+                return None
+
+        except anthropic.BadRequestError as e:
+            logger.error(f"Bad request error (possibly schema validation): {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error calling LLM: {e}")
+            return None
