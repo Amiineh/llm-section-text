@@ -1,0 +1,11 @@
+**Generative AI is a transformative technology**
+
+The last year has seen a spectacular acceleration in generative AI: systems able to generate text / image conditioned on text and images. Those systems can help humans:
+
+● produce superb creative content (text, code, graphics)
+
+● read, process and summarise unstructured content streams thousands of times faster than humans
+
+● interact with the world (exposed through natural or application interfaces) to execute workflows faster than ever before.
+
+The power of generative AI was suddenly demonstrated to the general audience with the release of ChatGPT; this kind of product has been in the making by only a few small teams across the world — the few researchers of these teams are now the limiting factor to create new economic actors in the field.

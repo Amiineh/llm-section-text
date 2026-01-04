@@ -1,0 +1,9 @@
+This section has unicode: café, naïve, 日本語
+
+## Emoji Section 😀
+
+Content with emojis: 🎉 🚀 ⭐
+
+## Mathematical Symbols
+
+∑ ∫ ∂ ∇ ≈ ≠ ≤ ≥

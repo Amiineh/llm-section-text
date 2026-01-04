@@ -1,0 +1,13 @@
+
+This document contains special characters: @#$%^&*()
+
+## Code Blocks
+
+```python
+def example():
+    return "code with special chars: <>[]{}!?"
+```
+
+## More Content
+
+End of section with special chars: ~`|\\"""
